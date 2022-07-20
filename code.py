@@ -13,12 +13,35 @@ import analogio
 from math import log
 import time_api as t
 import rtc
+import adafruit_dht
 
 try:
     from secrets import secrets
 except ImportError:
     print("WiFi secrets are kept in secrets.py, please add them there!")
     raise
+# Initial the dht device, with data pin connected to:
+#dhtDevice = adafruit_dht.DHT11(board.GP5)
+dhtDevice = adafruit_dht.DHT22(board.GP5)
+def get_dht():
+    try:
+        # Print the values to the serial port
+        temperature_c = dhtDevice.temperature
+        temperature_f = temperature_c * (9 / 5) + 32
+        humidity = dhtDevice.humidity
+        print(
+            "Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(
+                temperature_f, temperature_c, humidity
+            )
+        )
+        return temperature_c
+    except RuntimeError as error:
+        # Errors happen fairly often, DHT's are hard to read, just keep going
+        print(error.args[0])
+        time.sleep(2.0)
+    except Exception as error:
+        dhtDevice.exit()
+        raise error
 
 sleep_duration = 10
 deviceid = secrets["deviceid"]
@@ -144,6 +167,7 @@ while True:
     str_date = str(the_rtc.datetime.tm_year) + '-' + str(the_rtc.datetime.tm_mon) + '-' +  str(the_rtc.datetime.tm_mday)
     str_time = str(the_rtc.datetime.tm_hour) + ':' + str(the_rtc.datetime.tm_min) + ':' +  str(the_rtc.datetime.tm_sec)
     print(str_date + ' ' + str_time)
+    tempdht = get_dht()
     temperature = get_temperature()
     print("Sleeping for: {0} Seconds".format(sleep_duration))
     print("Grove temperature  %.0f " %(temperature))
@@ -154,9 +178,10 @@ while True:
     print(msg)
     mqtt_client.publish(mqtt_topic,msg )
     oled.fill(0)
-    oled.text('DateTime:',0,20, 1)
-    oled.text(str_date + ' ' + str_time ,0,30, 1)
-    oled.text('Temperature:',0,40, 1)
-    oled.text(str(temperature),50,50, 1)
+    oled.text('DateTime:',0,10, 1)
+    oled.text(str_date + ' ' + str_time ,0,20, 1)
+    oled.text('Temperature:',0,30, 1)
+    oled.text(str(temperature),50,40, 1)
+    oled.text('TempDht:' + str(tempdht),0,50, 1)
     oled.show()
     time.sleep(sleep_duration)
