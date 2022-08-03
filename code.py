@@ -14,6 +14,8 @@ from math import log
 import time_api as t
 import rtc
 import adafruit_dht
+import microcontroller
+
 
 try:
     from secrets import secrets
@@ -52,6 +54,12 @@ B = 4275;               # B value of the thermistor
 R0 = 100000;            # R0 = 100k
 #print(sensor_read.value)
 
+def get_internal_temperature():
+    # thermistor = adafruit_thermistor.Thermistor(board.GP4, 10000, 10000, 25, 3950)
+    # return thermistor.temperature
+    temperature = round(microcontroller.cpu.temperature,2)
+    return temperature 
+
 def convert(x,in_min,in_max,out_min,out_max):
     return(x - in_min) * (out_max - out_min) // (in_max - in_min) + out_min
 # #Grove temperature
@@ -84,7 +92,7 @@ esp = adafruit_espatcontrol.ESP_ATcontrol(uart, 115200, debug=False)
 
 wifi = adafruit_espatcontrol.ESP_ATcontrol(uart, 115200, debug=False)
 
-mqtt_topic = "nodered/topic"
+mqtt_topic = "nodered/pico"
 
 ### Code ###
 # Define callback methods which are called when events occur
@@ -164,24 +172,48 @@ the_rtc = time_api.get_time()
 print(the_rtc.datetime)
 
 while True:
+    #internal pico temperature
+    tempePico = get_internal_temperature()
+
     str_date = str(the_rtc.datetime.tm_year) + '-' + str(the_rtc.datetime.tm_mon) + '-' +  str(the_rtc.datetime.tm_mday)
     str_time = str(the_rtc.datetime.tm_hour) + ':' + str(the_rtc.datetime.tm_min) + ':' +  str(the_rtc.datetime.tm_sec)
     print(str_date + ' ' + str_time)
     tempdht = get_dht()
     temperature = get_temperature()
     print("Sleeping for: {0} Seconds".format(sleep_duration))
+    # print("Dht temperature  %.0f " %(tempdht))    
     print("Grove temperature  %.0f " %(temperature))
+    print("Pico temperature  %.0f " %(tempePico))
     print("Attempting to connect to %s" % mqtt_client.broker)
-    mqtt_client.connect()
-    print("Publishing to %s" % mqtt_topic)
-    msg = '{"measurement":"' + deviceid + '","payload":{"temperature": ' + str(temperature) +'} }'
-    print(msg)
-    mqtt_client.publish(mqtt_topic,msg )
+    try:
+        mqtt_client.connect()
+        print("Publishing to %s" % mqtt_topic)
+        msg = '{"measurement":"' + deviceid + '","payload":{"temperature": ' + str(temperature) +'} }'
+        # msg = '{"measurement":"' + deviceid + '","payload":{"temperature": ' + str(tempdht) +'} }'    
+        print(msg)        
+        mqtt_client.publish(mqtt_topic,msg )
+        mqtt_client.disconnect()                 
+    except RuntimeError as error:
+        print(error.args[0])
+        print("Except")
+        time.sleep(2.0)
+    except Exception as e:
+        print("No Connect Mqtt server")    
+        oled.fill(0)
+        oled.text('DateTime:',0,5, 1)
+        oled.text(str_date + ' ' + str_time ,0,20, 1)        
+        oled.text("No Connect Mqtt server",0,30, 1)
+        oled.show()  
+        time.sleep(2.0)    
+        continue             
+
     oled.fill(0)
     oled.text('DateTime:',0,5, 1)
     oled.text(str_date + ' ' + str_time ,0,20, 1)
     oled.text('Temperature:',0,30, 1)
     oled.text(str(temperature),50,40, 1)
-    oled.text('TempDht:' + str(tempdht),0,50, 1)
+    # oled.text(str(tempdht),50,40, 1)    
+    # oled.text(str(tempePico),50,40, 1)
+    oled.text('TempPico:' + str(tempePico),0,50, 1)
     oled.show()
     time.sleep(sleep_duration)
